@@ -1,0 +1,18 @@
+[workspace]
+authors = ["Rhys Takahashi <19mt01@gmail.com>"]
+channels = ["conda-forge"]
+name = "tpx_pipeline"
+platforms = ["linux-64"]
+version = "0.1.0"
+preview = ["pixi-build"]
+
+[tasks]
+
+[dependencies]
+p4p = ">=4.2.2,<5"
+numpy = ">=2.4.3,<3"
+dask = ">=2026.3.0,<2027"
+tiled = ">=0.1.6,<0.2"
+
+[pypi-dependencies]
+tpx3awkward = { git = "https://github.com/NSLS2/tpx3awkward.git" }
