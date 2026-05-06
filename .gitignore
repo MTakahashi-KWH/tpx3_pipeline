@@ -1,5 +1,7 @@
 # pixi environments
 .pixi/*
 !.pixi/config.toml
-
+test_data/*
 settings.json
+
+*.tpx3

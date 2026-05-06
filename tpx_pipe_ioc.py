@@ -13,6 +13,7 @@ import threading
 from multiprocessing import JoinableQueue, shared_memory, Process, Value
 from queue import Empty
 import time
+from pathlib import Path
 Queue = JoinableQueue
 
 HOST = "localhost"
@@ -23,7 +24,9 @@ NUM_THREADS = 4
 SID = Value(c_int,-1)
 SCAN = Value(c_int,0)
 ACTIVE = Value(c_bool,False)
-# OUTPUT_DIR = 
+data_dir = Path.cwd() / 'data'
+data_dir.mkdir(exist_ok=True)
+OUTPUT_DIR = data_dir
 
 free_q = Queue()
 full_q = Queue()
@@ -116,7 +119,7 @@ def test_boot():
         while True:
             trigger_e.wait()
             print("PIPELINE: Triggered: connecting...")
-            for i in range(5):
+            for i in range(10):
                 print("PIPELINE: connection attempt: ",i)
                 try:
                     trigger()
