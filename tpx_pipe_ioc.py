@@ -6,7 +6,8 @@ import pandas as pd
 from p4p.nt import NTNDArray, NTScalar, NTURI
 from p4p.server import Server
 from p4p.server.thread import SharedPV
-import tpx3awkward.processing.decoding as tpx
+import tpx3awkward.processing as tpx
+from tpx3awkward.processing import Tpx3Config
 from ctypes import c_int, c_bool
 # from queue import Queue
 import threading
@@ -21,12 +22,14 @@ SERVAL = 8088
 BUFF_SIZE = 10 * 1024 * 1024
 NUM_BUFFERS = 8
 NUM_THREADS = 4
+
 SID = Value(c_int,-1)
 SCAN = Value(c_int,0)
 ACTIVE = Value(c_bool,False)
 data_dir = Path.cwd() / 'data'
 data_dir.mkdir(exist_ok=True)
 OUTPUT_DIR = data_dir
+TPX_CONFIG = Tpx3Config.from_defaults()
 
 free_q = Queue()
 full_q = Queue()
@@ -76,8 +79,15 @@ def worker(buffers,queues,params):
 
             # do processing
             print(f"WORKER: Processing {arr.size} ints")
-            res = pd.DataFrame(tpx.ingest_raw_data(arr)).sort_values("t").reset_index(drop=True)
-            out_q.put((index,res))
+            res = tpx.decode_tpx3_binary(arr)#pd.DataFrame(tpx.ingest_raw_data(arr)).sort_values("t").reset_index(drop=True)
+
+            clustered_df = tpx.cluster_decoded_df(
+                res,
+                TPX_CONFIG.time_window,
+                TPX_CONFIG.radius,
+            )
+            clustered_df.to_parquet(OUTPUT_DIR/ f"buff_{index}")
+            out_q.put((index,clustered_df))
             # return buffer to pool
             free_q.put(buf_i)
             print("WORKER: finished")
