@@ -1,11 +1,11 @@
 import numpy as np
 import socket
-import dask.dataframe as dd
-import pandas as pd
+# import dask.dataframe as dd
+# import pandas as pd
 
-from p4p.nt import NTNDArray, NTScalar, NTURI
-from p4p.server import Server
-from p4p.server.thread import SharedPV
+# from p4p.nt import NTNDArray, NTScalar, NTURI
+# from p4p.server import Server
+# from p4p.server.thread import SharedPV
 import tpx3awkward.processing as tpx
 # from tpx3awkward.processing import Tpx3Config  #TODO
 from ctypes import c_int, c_bool
@@ -112,17 +112,17 @@ def trigger():
         # callback(ddf)
 
     
-def start_ioc():
-    sid = SharedPV(nt=NTScalar('d'), initial = SID)
-    path = SharedPV(nt=NTURI())
-    active = SharedPV(nt=NTScalar('?'), initial = False)
-    broadcast = SharedPV(NTNDArray)
-    Server.forever(providers=[{
-    'tpx:pipe:sid':sid, # PV name only appears here
-    'tpx:pipe:path':path,
-    'tpx:pipe:active':active,
-    'tpx:pipe:broadcast':broadcast,
-    }])
+# def start_ioc():
+#     sid = SharedPV(nt=NTScalar('d'), initial = SID)
+#     path = SharedPV(nt=NTURI())
+#     active = SharedPV(nt=NTScalar('?'), initial = False)
+#     broadcast = SharedPV(NTNDArray)
+#     Server.forever(providers=[{
+#     'tpx:pipe:sid':sid, # PV name only appears here
+#     'tpx:pipe:path':path,
+#     'tpx:pipe:active':active,
+#     'tpx:pipe:broadcast':broadcast,
+#     }])
     
 def test_boot():
     trigger_e = threading.Event()
@@ -160,4 +160,4 @@ if __name__ == "__main__":
         Process(target=worker, daemon=True,args=(buffers,(free_q,full_q,out_q),()),name=f"tpx_file_worker_{i}").start()
 
     
-    start_ioc()
+    # start_ioc()
