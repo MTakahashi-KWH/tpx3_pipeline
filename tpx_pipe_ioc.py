@@ -57,9 +57,9 @@ def stream(sock):
                 if flag_end:
                     break
                 flag_end = True
-                print("0 packet received... suspecting eot... awaiting next update")
+                print("[socket]\t 0 packet received... suspecting eot... awaiting next update")
             read_total += n
-        print("writing out sequence ", index, " to buffer ",buf_i)
+        print("[socket]\t writing out sequence ", index, " to buffer ",buf_i)
         # hand off buffer (no copy)
         full_q.put((buf_i, read_total - (read_total%8) , index))
         index +=1
@@ -72,13 +72,18 @@ def worker(buffers,queues,params):
     while True:
         try:
             buf_i, size, index = full_q.get()  # take ownership
-            print("WORKER: claimed sequence item ", index, " of size ", size, " with tail(?) length ", size%8)
+            print("[worker]\t claimed sequence item ", index, " of size ", size, " with tail(?) length ", size%8)
+            if size == 0:
+                print("[worker]\t empty or terminal buffer, skipping")
+                free_q.put(buf_i)
+                full_q.task_done()
+                continue
+
             buf = buffers[buf_i].buf
             # zero-copy cast
             arr = np.frombuffer(buf[:size], dtype="<u8")
-
             # do processing
-            print(f"WORKER: Processing {arr.size} ints")
+            print(f"[worker]\t Processing {arr.size} ints")
             res = tpx.decode_tpx3_binary(arr)#pd.DataFrame(tpx.ingest_raw_data(arr)).sort_values("t").reset_index(drop=True)
 
             clustered_df = tpx.cluster_raw_df(
@@ -90,7 +95,7 @@ def worker(buffers,queues,params):
             out_q.put((index,clustered_df))
             # return buffer to pool
             free_q.put(buf_i)
-            print("WORKER: finished")
+            print("[worker]\t finished")
             full_q.task_done()
         except Empty:
             continue
@@ -121,16 +126,16 @@ def start_ioc():
     
 def test_boot():
     trigger_e = threading.Event()
-    print("PIPELINE: starting up")
+    print("[pipeline]\t starting up")
     for i in range(NUM_THREADS):  # adjust based on CPU
         Process(target=worker, daemon=True,args=(buffers,(free_q,full_q,out_q),()),name=f"tpx_file_worker_{i}").start()
-    print("PIPELINE: daemon processes deployed")
+    print("[pipeline]\t daemon processes deployed")
     def socket_listener():
         while True:
             trigger_e.wait()
-            print("PIPELINE: Triggered: connecting...")
+            print("[pipeline]\t Triggered: connecting...")
             for i in range(10):
-                print("PIPELINE: connection attempt: ",i)
+                print("[pipeline]\t connection attempt: ",i)
                 try:
                     trigger()
                     # print("... sucessful")

@@ -4,4 +4,5 @@
 test_data/*
 settings.json
 data/*
+__pycache__/*
 *.tpx3
