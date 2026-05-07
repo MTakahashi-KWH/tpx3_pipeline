@@ -20,8 +20,8 @@ Queue = JoinableQueue
 HOST = "localhost"
 SERVAL = 8088
 BUFF_SIZE = 10 * 1024 * 1024
-NUM_BUFFERS = 8
-NUM_THREADS = 4
+NUM_BUFFERS = 16
+NUM_THREADS = 6
 
 SID = Value(c_int,-1)
 SCAN = Value(c_int,0)
@@ -81,12 +81,12 @@ def worker(buffers,queues,params):
             print(f"WORKER: Processing {arr.size} ints")
             res = tpx.decode_tpx3_binary(arr)#pd.DataFrame(tpx.ingest_raw_data(arr)).sort_values("t").reset_index(drop=True)
 
-            clustered_df = tpx.cluster_decoded_df(
+            clustered_df = tpx.cluster_raw_df(
                 res,
-                TPX_CONFIG.time_window,
-                TPX_CONFIG.radius,
+                .3,
+                3,
             )
-            clustered_df.to_parquet(OUTPUT_DIR/ f"buff_{index}")
+            clustered_df.to_parquet(OUTPUT_DIR/ f"buff_{index}.parquet")
             out_q.put((index,clustered_df))
             # return buffer to pool
             free_q.put(buf_i)

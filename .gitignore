@@ -3,5 +3,5 @@
 !.pixi/config.toml
 test_data/*
 settings.json
-
+data/*
 *.tpx3
