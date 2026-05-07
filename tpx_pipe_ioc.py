@@ -7,7 +7,7 @@ from p4p.nt import NTNDArray, NTScalar, NTURI
 from p4p.server import Server
 from p4p.server.thread import SharedPV
 import tpx3awkward.processing as tpx
-from tpx3awkward.processing import Tpx3Config
+# from tpx3awkward.processing import Tpx3Config  #TODO
 from ctypes import c_int, c_bool
 # from queue import Queue
 import threading
@@ -29,7 +29,7 @@ ACTIVE = Value(c_bool,False)
 data_dir = Path.cwd() / 'data'
 data_dir.mkdir(exist_ok=True)
 OUTPUT_DIR = data_dir
-TPX_CONFIG = Tpx3Config.from_defaults()
+# TPX_CONFIG = Tpx3Config.from_defaults() #TODO
 
 free_q = Queue()
 full_q = Queue()
