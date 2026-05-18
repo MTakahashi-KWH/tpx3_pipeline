@@ -30,7 +30,7 @@ NUM_THREADS = 6
 
 SID = Value(c_int, -1)
 SCAN = Value(c_int, -1)
-ACTIVE = Value(c_bool, False)
+ACTIVE = Value(c_bool, True)
 data_dir = Path.cwd() / "data"
 data_dir.mkdir(exist_ok=True)
 OUTPUT_DIR = data_dir
