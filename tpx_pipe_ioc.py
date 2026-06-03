@@ -39,6 +39,7 @@ OUTPUT_DIR = data_dir
 free_q = Queue()
 full_q = Queue()
 out_q = Queue()
+file_q = Queue()
 
 # Preallocate buffers
 buffers = []
@@ -76,7 +77,7 @@ def stream(sock):
 
 
 def worker(buffers, queues, params):
-    free_q, full_q, out_q = queues
+    free_q, full_q, out_q, file_q = queues
     sid, scan, active, handler = params
     while True:
         if active.value:
@@ -105,16 +106,14 @@ def worker(buffers, queues, params):
                     arr
                 )  # pd.DataFrame(tpx.ingest_raw_data(arr)).sort_values("t").reset_index(drop=True)
 
-                clustered_df = tpx.cluster_raw_df(
-                    res,
-                    0.3,
-                    3,
-                )
+                clustered_df = tpx.cluster_raw_df( res, 0.3, 3,)
+                
                 path = (
                     handler["fpath"] / f"buff_{sid.value}_{scan.value}_{index}.parquet"
                 )
                 clustered_df.to_parquet(path)
                 out_q.put((index, clustered_df))
+                file_q.put((index, path))
                 # return buffer to pool
                 free_q.put(buf_i)
                 print(f"[worker]\t finished saving {path}")
@@ -236,7 +235,11 @@ def deploy(data_host):
         Process(
             target=worker,
             daemon=True,
-            args=(buffers, (free_q, full_q, out_q), (SID, SCAN, ACTIVE, data_host)),
+            args=(
+                buffers,
+                (free_q, full_q, out_q, file_q),
+                (SID, SCAN, ACTIVE, data_host),
+            ),
             name=f"tpx_file_worker_{i}",
         ).start()
 
