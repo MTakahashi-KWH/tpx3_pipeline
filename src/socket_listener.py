@@ -3,7 +3,7 @@ import time
 
 HOST = "localhost"
 SERVAL = 8088
-BUFF_SIZE = 100 * 1024 * 1024
+BUFF_SIZE = 10 * 1024 * 1024
 RETRY_ATTEMPTS = 10
 
 def stream(sock, buffers, queues):

@@ -13,7 +13,6 @@ from ctypes import c_int, c_bool
 # from queue import Queue
 # import threading
 from multiprocessing import JoinableQueue, shared_memory, Process, Value, Manager, Event
-import time
 from pathlib import Path
 
 from .file_worker import worker
@@ -25,7 +24,7 @@ NUM_THREADS = 6
 NUM_BUFFERS = 16
 
 SID = Value(c_int, -1)
-SCAN = Value(c_int, -1)
+SCAN = Value(c_int, 0)
 ACTIVE = Value(c_bool, True)
 data_dir = Path.cwd() / "data"
 data_dir.mkdir(exist_ok=True)
@@ -47,14 +46,6 @@ for i in range(NUM_BUFFERS):
 
 
 def start_ioc(manager,triggerable):
-    sid = SharedPV(nt=NTScalar("d"), initial=SID)
-
-    @sid.put
-    def scan_id(sid, op):
-        sid.post(op.value())
-        SID.value = op.value()
-        SCAN.value = -1
-        op.done()
 
     scan = SharedPV(nt=NTScalar("d"), initial=SCAN)
 
@@ -62,10 +53,22 @@ def start_ioc(manager,triggerable):
     def scan_num(scan, op):
         if op.value() == -1:
             SCAN.value = SCAN.value + 1
-            scan.post(SCAN.value)
         else:
-            scan.post(op.value())
             SCAN.value = op.value()
+        scan.post(SCAN.value)
+        op.done()
+
+    sid = SharedPV(nt=NTScalar("d"), initial=SID)
+
+    @sid.put
+    def scan_id(sid, op):
+        if op.value() == -1:
+            SID.value = SID.value + 1
+        else:
+            SID.value = op.value()
+        sid.post(SID.value)
+        SCAN.value = 0
+        scan.post(SCAN.value)
         op.done()
 
     path = SharedPV(nt=NTScalar("s"), initial=manager["fpath"])
@@ -89,8 +92,13 @@ def start_ioc(manager,triggerable):
     @start.put
     def starting(start, op):
         if ACTIVE.value:
-            triggerable.set()
-            SCAN.value = SCAN.value + 1
+            if op.value():
+                triggerable.set()
+                SCAN.value = SCAN.value + 1
+                start.post(op.value())
+            else:
+                start.post(op.value())
+
         op.done()
 
     # broadcast = SharedPV(nt=NTNDArray(),initial = np.zeros((257,257)))
@@ -109,18 +117,10 @@ def start_ioc(manager,triggerable):
     Server.forever(providers=providers)
 
 
-def test_boot():
-    trigger_e = Event()
+def test_boot(alt_dir: Path =None):
     print("[pipeline]\t starting up")
-    deploy({"fpath": OUTPUT_DIR})
+    trigger_e = deploy({"fpath": OUTPUT_DIR if alt_dir is None else alt_dir})
     print("[pipeline]\t daemon processes deployed")
-
-    t = Process(target=socket_listener, args=(
-                trigger_e,
-                buffers,
-                (free_q, full_q, out_q, file_q)),
-                  daemon=True)
-    t.start()
 
     return trigger_e, out_q, file_q
 
@@ -138,7 +138,23 @@ def deploy(data_host):
             ),
             name=f"tpx_file_worker_{i}",
         ).start()
+    
+    trigger_e = Event()
+    t = Process(target=socket_listener, args=(
+                trigger_e,
+                buffers,
+                (free_q, full_q, out_q, file_q)),
+                  daemon=True)
+    t.start()
+    return trigger_e
 
+def close():
+    full_q.join()
+    file_q.join()
+    out_q.join()
+    for buf in buffers:
+        buf.close()
+        buf.unlink()
 
 if __name__ == "__main__":
     # for _ in range(NUM_BUFFERS):
@@ -152,3 +168,4 @@ if __name__ == "__main__":
         shared_dict["fpath"] = OUTPUT_DIR
         deploy(shared_dict)
         start_ioc(shared_dict)
+        close()
