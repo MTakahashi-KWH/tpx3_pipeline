@@ -51,6 +51,7 @@ def start_ioc(manager,triggerable):
     print("[DAEMON] booting ioc")
     scan = SharedPV(nt=NTScalar("d"), initial=SCAN.value)
     dname = "DAEMON"
+    file_accum = []
     @scan.put
     def scan_num(scan, op):
         print(f"[{dname}] scan update: {op.value()}")
@@ -71,7 +72,7 @@ def start_ioc(manager,triggerable):
         else:
             SID.value = int(op.value())
         sid.post(SID.value)
-        SCAN.value = 0
+        SCAN.value = -1
         scan.post(SCAN.value)
         op.done()
 
@@ -97,16 +98,17 @@ def start_ioc(manager,triggerable):
         op.done()
 
     start = SharedPV(nt=NTScalar("?"), initial=False)
+    file_block = SharedPV(nt=NTScalar("as"),initial = [])
 
     @start.put
     def starting(start, op):
         print(f"[{dname}] trigger update: {op.value()}")
         if ACTIVE.value:
             if op.value():
+                file_accum = []
+                file_block.post([])
                 triggerable.set()
                 SCAN.value = SCAN.value + 1
-                start.post(op.value())
-            else:
                 start.post(op.value())
 
         op.done()
@@ -114,20 +116,21 @@ def start_ioc(manager,triggerable):
     # broadcast = SharedPV(nt=NTNDArray(),initial = np.zeros((257,257)))
     file_stream = SharedPV(nt=NTScalar("s"), initial=False)
 
-    @file_stream.put
-    def post_file(pv,op):
-        print(f"[{dname}] new file update: {op.value()}")
-        pv.post(op.value())
-        op.done()
+    # @file_stream.put
+    # def post_file(pv,op):
+    #     print(f"[{dname}] new file update: {op.value()}")
+    #     pv.post(op.value())
+    #     op.done()
 
     providers = [
         {
             "tpx:pipe:sid": sid,
-            "tpx:pipe:scan": sid,
+            "tpx:pipe:scan": scan,
             "tpx:pipe:path": path,
             "tpx:pipe:active": active,
-            "tpx:pipe:trigger": start,
-            "tpx:pipe:file":file_stream
+            "tpx:pipe:fire": start,
+            "tpx:pipe:file":file_stream,
+            "tpx:pipe:files":file_block
             # "tpx:pipe:broadcast": broadcast,
         }
     ]
@@ -136,7 +139,11 @@ def start_ioc(manager,triggerable):
             try:
                 index, path = file_q.get()
                 file_stream.post(str(path))
+                file_accum.append(str(path))
+                file_block.post(
+                    sorted(file_accum,key=lambda x:int(Path(x).stem.split("_")[-1])))
                 file_q.task_done()
+
                 if file_q.empty() and full_q.empty():
                     full_q.join()
                     if file_q.empty():
