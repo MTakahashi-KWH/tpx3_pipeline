@@ -50,9 +50,10 @@ for i in range(NUM_BUFFERS):
 def start_ioc(manager,triggerable):
     print("[DAEMON] booting ioc")
     scan = SharedPV(nt=NTScalar("d"), initial=SCAN.value)
-
+    dname = "DAEMON"
     @scan.put
     def scan_num(scan, op):
+        print(f"[{dname}] scan update: {op.value()}")
         if op.value() == -1:
             SCAN.value = SCAN.value + 1
         else:
@@ -64,6 +65,7 @@ def start_ioc(manager,triggerable):
 
     @sid.put
     def scan_id(sid, op):
+        print(f"[{dname}] SID update: {op.value()}")
         if op.value() == -1:
             SID.value = SID.value + 1
         else:
@@ -78,6 +80,7 @@ def start_ioc(manager,triggerable):
 
     @path.put
     def pathing(path, op):
+        print(f"[{dname}] path update: {op.value()}")
         path.post(op.value())
         manager["fpath"] = Path(op.value())
         op.done()
@@ -86,6 +89,7 @@ def start_ioc(manager,triggerable):
 
     @active.put
     def activate(active, op):
+        print(f"[{dname}] actvity set update: {op.value()}")
         active.post(op.value())
         ACTIVE.value = op.value()
         op.done()
@@ -94,6 +98,7 @@ def start_ioc(manager,triggerable):
 
     @start.put
     def starting(start, op):
+        print(f"[{dname}] trigger update: {op.value()}")
         if ACTIVE.value:
             if op.value():
                 triggerable.set()
@@ -109,6 +114,7 @@ def start_ioc(manager,triggerable):
 
     @file_stream.put
     def post_file(pv,op):
+        print(f"[{dname}] new file update: {op.value()}")
         pv.post(op.value())
         op.done()
 
