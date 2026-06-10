@@ -2,6 +2,7 @@ import time
 
 import numpy as np
 import tpx3awkward.processing as tpx
+from pathlib import Path
 from queue import Empty
 from uuid import uuid6 as uid
 
@@ -38,7 +39,7 @@ def worker(buffers, queues, params):
             clustered_df = tpx.cluster_raw_df( res, 0.3, 3,)
 
             path = (
-                handler["fpath"] / f"buff_{sid.value}_{scan.value}_{index}.parquet"
+                Path(handler["fpath"]) / f"buff_{sid.value}_{scan.value}_{index}.parquet"
             )
             if path.exists():
                 path = path.with_stem(path.stem+"_"+str(uid()))

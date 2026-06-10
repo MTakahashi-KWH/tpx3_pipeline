@@ -17,3 +17,9 @@ From the project root:
 ```bash
 pixi run python -m src.tpx_pipe_ioc {alternate output directory}
 ```
+
+Option 3: run using local_dispatch
+
+```bash
+pixi run python local_dispatch.py
+```

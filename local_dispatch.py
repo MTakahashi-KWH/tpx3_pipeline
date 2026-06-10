@@ -1,12 +1,6 @@
 import src.tpx_pipe_ioc as tpi
-import dask.dataframe as dd
-import threading
-import socket
-from pathlib import Path
-import numpy as np
+import src.socket_listener as tpl
 import time
-import pandas as pd
-import tpx3awkward as tpx
 import sys
 import requests
 # from urllib.parse import urlparse
@@ -14,10 +8,12 @@ import requests
 
 if __name__ == "__main__":
     trigger, out_q = tpi.test_boot()
-    if sys.argv[1] is not None:
-        requests.get('https://'+str(sys.argv[1])+"/measurement/start")
+    if len(sys.argv) > 1:
+        servurl = 'https://'+str(sys.argv[1])
     else:
-        requests.get('https://'+tpi.HOST +":"  + tpi.SERVAL+"/measurement/start")
+        servurl = 'https://'+tpl.HOST +":"+ str(tpl.SERVAL)
+    
+    requests.get(servurl+"/measurement/start")
 
     trigger.set()
     cycler = 0
@@ -29,6 +25,9 @@ if __name__ == "__main__":
         time.sleep(1)
     
     print("[monitor]\t stream has ended")
+    requests.get(servurl+"/measurement/stop")
+    tpi.close()
+
 
 
 

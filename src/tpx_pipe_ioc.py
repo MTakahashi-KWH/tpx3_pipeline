@@ -57,7 +57,7 @@ def start_ioc(manager,triggerable):
         if op.value() == -1:
             SCAN.value = SCAN.value + 1
         else:
-            SCAN.value = op.value()
+            SCAN.value = int(op.value())
         scan.post(SCAN.value)
         op.done()
 
@@ -69,7 +69,7 @@ def start_ioc(manager,triggerable):
         if op.value() == -1:
             SID.value = SID.value + 1
         else:
-            SID.value = op.value()
+            SID.value = int(op.value())
         sid.post(SID.value)
         SCAN.value = 0
         scan.post(SCAN.value)
@@ -81,8 +81,10 @@ def start_ioc(manager,triggerable):
     @path.put
     def pathing(path, op):
         print(f"[{dname}] path update: {op.value()}")
-        path.post(op.value())
-        manager["fpath"] = Path(op.value())
+        pth = Path(op.value())
+        if pth.exists():
+            path.post(op.value())
+            manager["fpath"] = str(pth)
         op.done()
 
     active = SharedPV(nt=NTScalar("?"), initial=ACTIVE.value)
@@ -138,7 +140,7 @@ def start_ioc(manager,triggerable):
                 if file_q.empty() and full_q.empty():
                     full_q.join()
                     if file_q.empty():
-                        start.post(0)
+                        start.post(False)
             except Empty:
                 time.wait(.1)
             except KeyboardInterrupt:
