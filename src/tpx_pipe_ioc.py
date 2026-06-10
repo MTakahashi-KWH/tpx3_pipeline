@@ -13,6 +13,8 @@ from ctypes import c_int, c_bool
 # from queue import Queue
 # import threading
 from multiprocessing import JoinableQueue, shared_memory, Process, Value, Manager, Event
+from queue import Empty
+import time
 from pathlib import Path
 
 from .file_worker import worker
@@ -24,7 +26,7 @@ NUM_THREADS = 6
 NUM_BUFFERS = 16
 
 SID = Value(c_int, -1)
-SCAN = Value(c_int, 0)
+SCAN = Value(c_int, -1)
 ACTIVE = Value(c_bool, True)
 data_dir = Path.cwd() / "data"
 data_dir.mkdir(exist_ok=True)
@@ -46,8 +48,8 @@ for i in range(NUM_BUFFERS):
 
 
 def start_ioc(manager,triggerable):
-
-    scan = SharedPV(nt=NTScalar("d"), initial=SCAN)
+    print("[DAEMON] booting ioc")
+    scan = SharedPV(nt=NTScalar("d"), initial=SCAN.value)
 
     @scan.put
     def scan_num(scan, op):
@@ -58,7 +60,7 @@ def start_ioc(manager,triggerable):
         scan.post(SCAN.value)
         op.done()
 
-    sid = SharedPV(nt=NTScalar("d"), initial=SID)
+    sid = SharedPV(nt=NTScalar("d"), initial=SID.value)
 
     @sid.put
     def scan_id(sid, op):
@@ -71,7 +73,8 @@ def start_ioc(manager,triggerable):
         scan.post(SCAN.value)
         op.done()
 
-    path = SharedPV(nt=NTScalar("s"), initial=manager["fpath"])
+    print("[DAEMON] host directory: ",manager["fpath"])
+    path = SharedPV(nt=NTScalar("s"), initial=str(manager["fpath"]))
 
     @path.put
     def pathing(path, op):
@@ -104,6 +107,11 @@ def start_ioc(manager,triggerable):
     # broadcast = SharedPV(nt=NTNDArray(),initial = np.zeros((257,257)))
     file_stream = SharedPV(nt=NTScalar("s"), initial=False)
 
+    @file_stream.put
+    def post_file(pv,op):
+        pv.post(op.value())
+        op.done()
+
     providers = [
         {
             "tpx:pipe:sid": sid,
@@ -111,10 +119,25 @@ def start_ioc(manager,triggerable):
             "tpx:pipe:path": path,
             "tpx:pipe:active": active,
             "tpx:pipe:trigger": start,
+            "tpx:pipe:file":file_stream
             # "tpx:pipe:broadcast": broadcast,
         }
     ]
-    Server.forever(providers=providers)
+    with Server(providers=providers) as serv:
+        while True:
+            try:
+                index, path = file_q.get()
+                file_stream.post(str(path))
+                file_q.task_done()
+                if file_q.empty() and full_q.empty():
+                    full_q.join()
+                    if file_q.empty():
+                        start.post(0)
+            except Empty:
+                time.wait(.1)
+            except KeyboardInterrupt:
+                break
+    # Server.forever(providers=providers)
 
 
 def test_boot(alt_dir: Path =None):
@@ -126,7 +149,7 @@ def test_boot(alt_dir: Path =None):
 
 
 def deploy(data_host):
-    print("DAEMON: entering daemon routine")
+    print("[DAEMON] entering daemon routine")
     for i in range(NUM_THREADS):  # adjust based on CPU
         Process(
             target=worker,
@@ -161,11 +184,11 @@ if __name__ == "__main__":
     #     free_q.put(bytearray(BUFF_SIZE))
     # Start workers
     with Manager() as manager:
-        if sys.argv[1] is not None:
+        if len(sys.argv) > 1:
             OUTPUT_DIR = sys.argv[1]
         # Create a shared dictionary
         shared_dict = manager.dict()
         shared_dict["fpath"] = OUTPUT_DIR
-        deploy(shared_dict)
-        start_ioc(shared_dict)
+        trigger = deploy(shared_dict)
+        start_ioc(shared_dict,trigger)
         close()

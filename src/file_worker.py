@@ -3,6 +3,7 @@ import time
 import numpy as np
 import tpx3awkward.processing as tpx
 from queue import Empty
+from uuid import uuid6 as uid
 
 
 def worker(buffers, queues, params):
@@ -39,6 +40,8 @@ def worker(buffers, queues, params):
             path = (
                 handler["fpath"] / f"buff_{sid.value}_{scan.value}_{index}.parquet"
             )
+            if path.exists():
+                path = path.with_stem(path.stem+"_"+str(uid()))
             clustered_df.to_parquet(path)
             out_q.put((index, clustered_df))
             file_q.put((index, path))
@@ -47,5 +50,5 @@ def worker(buffers, queues, params):
             print(f"[worker]\t finished saving {path}")
             full_q.task_done()
         except Empty:
-            time.wait(.5)
+            time.wait(.2)
             continue
