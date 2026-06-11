@@ -16,6 +16,7 @@ from multiprocessing import JoinableQueue, shared_memory, Process, Value, Manage
 from queue import Empty
 import time
 from pathlib import Path
+from bisect import insort
 
 from .file_worker import worker
 from .socket_listener import socket_listener, BUFF_SIZE
@@ -139,9 +140,8 @@ def start_ioc(manager,triggerable):
             try:
                 index, path = file_q.get()
                 file_stream.post(str(path))
-                file_accum.append(str(path))
-                file_block.post(
-                    sorted(file_accum,key=lambda x:int(Path(x).stem.split("_")[3])))
+                insort(file_accum,str(path),key=lambda x:int(Path(x).stem.split("_")[3]))
+                file_block.post(file_accum)
                 file_q.task_done()
 
                 if file_q.empty() and full_q.empty():
