@@ -15,7 +15,7 @@ Option 2: run as a fake EPICS IOC
 From the project root:
 
 ```bash
-pixi run python -m src.tpx_pipe_ioc {alternate output directory}
+pixi run python -m src.tpx_pipe_ioc [--path {alternate output directory} ]  [--prefix {IOC prefix}]
 ```
 
 Option 3: run using local_dispatch

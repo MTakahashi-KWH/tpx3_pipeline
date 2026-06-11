@@ -1,22 +1,16 @@
-import sys
-
-# import dask.dataframe as dd
-# import pandas as pd
-
-from p4p.nt import NTNDArray, NTScalar
+from p4p.nt import NTScalar
 from p4p.server import Server
 from p4p.server.thread import SharedPV
 
 # from tpx3awkward.processing import Tpx3Config  #TODO
 from ctypes import c_int, c_bool
 
-# from queue import Queue
-# import threading
 from multiprocessing import JoinableQueue, shared_memory, Process, Value, Manager, Event
 from queue import Empty
 import time
 from pathlib import Path
 from bisect import insort
+import argparse
 
 from .file_worker import worker
 from .socket_listener import socket_listener, BUFF_SIZE
@@ -32,6 +26,7 @@ ACTIVE = Value(c_bool, True)
 data_dir = Path.cwd() / "data"
 data_dir.mkdir(exist_ok=True)
 OUTPUT_DIR = data_dir
+PREFIX = "tpx:pipe:"
 # TPX_CONFIG = Tpx3Config.from_defaults() #TODO
 
 free_q = Queue()
@@ -41,18 +36,14 @@ file_q = Queue()
 
 # Preallocate buffers
 buffers = []
-for i in range(NUM_BUFFERS):
-    shm = shared_memory.SharedMemory(create=True, size=BUFF_SIZE)
-    buffers.append(shm)
-    free_q.put(i)  # pass index, not data
 
 
-
-def start_ioc(manager,triggerable):
+def start_ioc(manager, triggerable):
     print("[DAEMON] booting ioc")
     scan = SharedPV(nt=NTScalar("d"), initial=SCAN.value)
     dname = "DAEMON"
     file_accum = []
+
     @scan.put
     def scan_num(scan, op):
         print(f"[{dname}] scan update: {op.value()}")
@@ -77,7 +68,7 @@ def start_ioc(manager,triggerable):
         scan.post(SCAN.value)
         op.done()
 
-    print("[DAEMON] host directory: ",manager["fpath"])
+    print("[DAEMON] host directory: ", manager["fpath"])
     path = SharedPV(nt=NTScalar("s"), initial=str(manager["fpath"]))
 
     @path.put
@@ -99,7 +90,7 @@ def start_ioc(manager,triggerable):
         op.done()
 
     start = SharedPV(nt=NTScalar("?"), initial=False)
-    file_block = SharedPV(nt=NTScalar("as"),initial = [])
+    file_block = SharedPV(nt=NTScalar("as"), initial=[])
 
     @start.put
     def starting(start, op):
@@ -125,13 +116,13 @@ def start_ioc(manager,triggerable):
 
     providers = [
         {
-            "tpx:pipe:sid": sid,
-            "tpx:pipe:scan": scan,
-            "tpx:pipe:path": path,
-            "tpx:pipe:active": active,
-            "tpx:pipe:fire": start,
-            "tpx:pipe:file":file_stream,
-            "tpx:pipe:files":file_block
+            f"{PREFIX}sid": sid,
+            f"{PREFIX}scan": scan,
+            f"{PREFIX}path": path,
+            f"{PREFIX}active": active,
+            f"{PREFIX}fire": start,
+            f"{PREFIX}file": file_stream,
+            f"{PREFIX}files": file_block,
             # "tpx:pipe:broadcast": broadcast,
         }
     ]
@@ -140,7 +131,9 @@ def start_ioc(manager,triggerable):
             try:
                 index, path = file_q.get()
                 file_stream.post(str(path))
-                insort(file_accum,str(path),key=lambda x:int(Path(x).stem.split("_")[3]))
+                insort(
+                    file_accum, str(path), key=lambda x: int(Path(x).stem.split("_")[3])
+                )
                 file_block.post(file_accum)
                 file_q.task_done()
 
@@ -149,13 +142,11 @@ def start_ioc(manager,triggerable):
                     if file_q.empty():
                         start.post(False)
             except Empty:
-                time.wait(.1)
-            except KeyboardInterrupt:
-                break
+                time.wait(0.1)
     # Server.forever(providers=providers)
 
 
-def test_boot(alt_dir: Path =None):
+def test_boot(alt_dir: Path = None):
     print("[pipeline]\t starting up")
     trigger_e = deploy({"fpath": OUTPUT_DIR if alt_dir is None else alt_dir})
     print("[pipeline]\t daemon processes deployed")
@@ -165,6 +156,11 @@ def test_boot(alt_dir: Path =None):
 
 def deploy(data_host):
     print("[DAEMON] entering daemon routine")
+
+    for i in range(NUM_BUFFERS):
+        shm = shared_memory.SharedMemory(create=True, size=BUFF_SIZE)
+        buffers.append(shm)
+        free_q.put(i)  # pass index, not data
     for i in range(NUM_THREADS):  # adjust based on CPU
         Process(
             target=worker,
@@ -176,15 +172,16 @@ def deploy(data_host):
             ),
             name=f"tpx_file_worker_{i}",
         ).start()
-    
+
     trigger_e = Event()
-    t = Process(target=socket_listener, args=(
-                trigger_e,
-                buffers,
-                (free_q, full_q, out_q, file_q)),
-                  daemon=True)
+    t = Process(
+        target=socket_listener,
+        args=(trigger_e, buffers, (free_q, full_q, out_q, file_q)),
+        daemon=True,
+    )
     t.start()
     return trigger_e
+
 
 def close():
     full_q.join()
@@ -194,16 +191,41 @@ def close():
         buf.close()
         buf.unlink()
 
+
 if __name__ == "__main__":
     # for _ in range(NUM_BUFFERS):
     #     free_q.put(bytearray(BUFF_SIZE))
     # Start workers
+    parser = argparse.ArgumentParser(
+        description="CLI deployment of python IOC for timepix3 pipeline"
+    )
+    parser.add_argument(
+        "--path",
+        type=str,
+        dest="PATH",
+        help="A user provided default output directory. Can be changed at runtime",
+    )
+    parser.add_argument(
+        "--prefix",
+        type=str,
+        dest="prefix",
+        help="Used to set prefix of the epics channels, in case of name collision with multiple IOCs",
+    )
+    args = parser.parse_args()
+    if args.PATH is not None:
+        OUTPUT_DIR = args.PATH
+
+    if args.prefix is not None:
+        PREFIX = args.prefix
+
     with Manager() as manager:
-        if len(sys.argv) > 1:
-            OUTPUT_DIR = sys.argv[1]
         # Create a shared dictionary
         shared_dict = manager.dict()
         shared_dict["fpath"] = OUTPUT_DIR
         trigger = deploy(shared_dict)
-        start_ioc(shared_dict,trigger)
-        close()
+        try:
+            start_ioc(shared_dict, trigger)
+        except KeyboardInterrupt:
+            close()
+        else:
+            close()
