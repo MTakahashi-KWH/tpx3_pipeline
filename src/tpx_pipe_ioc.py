@@ -141,7 +141,7 @@ def start_ioc(manager,triggerable):
                 file_stream.post(str(path))
                 file_accum.append(str(path))
                 file_block.post(
-                    sorted(file_accum,key=lambda x:int(Path(x).stem.split("_")[-1])))
+                    sorted(file_accum,key=lambda x:int(Path(x).stem.split("_")[3])))
                 file_q.task_done()
 
                 if file_q.empty() and full_q.empty():
