@@ -1,5 +1,5 @@
-import src.tpx_pipe_ioc as tpi
-import src.socket_listener as tpl
+import tpx_pipeline.tpx_pipe_ioc as tpi
+import tpx_pipeline.socket_listener as tpl
 import time
 import sys
 import requests
