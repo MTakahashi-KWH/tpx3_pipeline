@@ -14,6 +14,7 @@ import argparse
 
 from .file_worker import worker
 from .socket_listener import socket_listener, BUFF_SIZE
+from .stream_dispatch import dispatcher
 
 Queue = JoinableQueue
 
@@ -126,6 +127,7 @@ def start_ioc(manager, triggerable):
             # "tpx:pipe:broadcast": broadcast,
         }
     ]
+    print(f"[{dname}] broadcasting on preifx address: {PREFIX}")
     with Server(providers=providers) as serv:
         while True:
             try:
@@ -142,7 +144,7 @@ def start_ioc(manager, triggerable):
                     if file_q.empty():
                         start.post(False)
             except Empty:
-                time.wait(0.1)
+                time.sleep(0.1)
     # Server.forever(providers=providers)
 
 
@@ -172,6 +174,7 @@ def deploy(data_host):
             ),
             name=f"tpx_file_worker_{i}",
         ).start()
+    Process(target=dispatcher,daemon=True,args=(out_q,(SID,SCAN)), name="tpx_dispatch_worker").start()
 
     trigger_e = Event()
     t = Process(

@@ -3830,8 +3830,8 @@ packages:
   - python >=3.14,<3.15.0a0
   - python_abi 3.14.* *_cp314
   license: Apache-2.0
-  purls:
-  - pkg:pypi/pyarrow?source=compressed-mapping
+  license_family: APACHE
+  purls: []
   size: 26828
   timestamp: 1776927974177
 - conda: https://conda.anaconda.org/conda-forge/linux-64/pyarrow-core-24.0.0-py314h969be7f_0_cpu.conda

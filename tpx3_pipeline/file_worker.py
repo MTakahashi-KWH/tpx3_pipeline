@@ -51,5 +51,5 @@ def worker(buffers, queues, params):
             print(f"[worker]\t finished saving {path}")
             full_q.task_done()
         except Empty:
-            time.wait(.2)
+            time.sleep(.2)
             continue
