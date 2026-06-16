@@ -6,7 +6,7 @@ from queue import Empty
 import time
 
 DISPATCHER_PORT = 5557
-_DISPATCHER_POLL_TIMEOUT = 0.2   # seconds to wait on out_q before checking for gaps
+_DISPATCHER_POLL_TIMEOUT = 0.5   # seconds to wait on out_q before checking for gaps
 _DISPATCHER_GAP_RETRIES  = 6      # how many timeouts to tolerate before skipping a gap
 
 def _publish(socket, idx, sid_val, scan_val, df):
@@ -38,6 +38,7 @@ def dispatcher(out_q,params,zmq_port=DISPATCHER_PORT):
     """
     recovery_queue = OrderedDict()
     next_expected = 0
+    dropout = {}
     SID, SCAN = params
 
     ctx    = zmq.Context()
@@ -49,12 +50,13 @@ def dispatcher(out_q,params,zmq_port=DISPATCHER_PORT):
         while True:
             try:
                 index, clustered_df = out_q.get(timeout= _DISPATCHER_POLL_TIMEOUT)  # take ownership
+                print(f"[DISPATCHER] received packet {str(index)}")
             except Empty:
                 if next_expected in recovery_queue.keys():
                     index, clustered_df = next_expected, recovery_queue.pop(next_expected)
                 else:
-                    f = [str(i) for i in recovery_queue.keys()]
-                    print(f"[DISPATCHER] holding onto keys: {' '.join(f)}" )
+                    # f = [str(i) for i in recovery_queue.keys()]
+                    # print(f"[DISPATCHER] holding onto keys: {' '.join(f)}, while waiting for {str(next_expected)}" )
                     continue
 
             if index == next_expected:
@@ -66,15 +68,24 @@ def dispatcher(out_q,params,zmq_port=DISPATCHER_PORT):
                         continue
                     
                     index, clustered_df = recovery_queue.popitem(last=False)
+                    dropout.add(index)
                 else:
                     next_expected = index +1 
+                    dropout = {}
             else:
                 recovery_queue[index] = clustered_df
-                if len(recovery_queue) <= _DISPATCHER_GAP_RETRIES:
+                if next_expected in recovery_queue.keys():
+                    index, clustered_df = next_expected, recovery_queue.pop(next_expected)
+                    next_expected += 1
+                elif len(recovery_queue) <= _DISPATCHER_GAP_RETRIES:
                     continue
-                
-                index, clustered_df = recovery_queue.popitem(last=False)
-            print(f"[DISPATCHER] publishing frame of index: {index}")
+                else:
+                    index, clustered_df = recovery_queue.popitem(last=False)
+                    dropout.add(index)
+            
+            while next_expected in dropout:
+                next_expected += 1
+            print(f"[DISPATCHER] publishing frame of index: {index} while targeting {next_expected}")
             _publish(socket=socket,idx=index,sid_val=SID.value,scan_val=SCAN.value,df=clustered_df)
     except KeyboardInterrupt:
         socket.close()
