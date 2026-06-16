@@ -38,8 +38,29 @@ def dispatcher(out_q,params,zmq_port=DISPATCHER_PORT):
     """
     recovery_queue = OrderedDict()
     next_expected = 0
-    dropout = {}
+    dropout = set()
     SID, SCAN = params
+    def pop_next(shelve=None):
+        nonlocal recovery_queue,next_expected, dropout
+        if shelve:
+            ind, df = shelve
+            recovery_queue[ind] = df
+        if next_expected in recovery_queue:
+            inter = next_expected
+            next_expected +=1
+            return inter, recovery_queue.pop(inter)
+        standing = [idx for idx in recovery_queue if idx> next_expected]
+        if standing:
+            idx = min(standing)
+            df = recovery_queue.pop(idx)
+            dropout.add(idx)
+            return idx,df
+        idx = min(recovery_queue)
+        df = recovery_queue.pop(idx)
+        dropout = {idx}
+        next_expected =0
+        return idx, df
+
 
     ctx    = zmq.Context()
     socket = ctx.socket(zmq.PUB)
@@ -52,36 +73,20 @@ def dispatcher(out_q,params,zmq_port=DISPATCHER_PORT):
                 index, clustered_df = out_q.get(timeout= _DISPATCHER_POLL_TIMEOUT)  # take ownership
                 print(f"[DISPATCHER] received packet {str(index)}")
             except Empty:
-                if next_expected in recovery_queue.keys():
-                    index, clustered_df = next_expected, recovery_queue.pop(next_expected)
-                else:
-                    # f = [str(i) for i in recovery_queue.keys()]
-                    # print(f"[DISPATCHER] holding onto keys: {' '.join(f)}, while waiting for {str(next_expected)}" )
+                if next_expected not in recovery_queue:
                     continue
+                index, clustered_df = pop_next()
+                print(f"[DISPATCHER] popped packet {str(index)}")
+                # f = [str(i) for i in recovery_queue.keys()]
+                # print(f"[DISPATCHER] holding onto keys: {' '.join(f)}, while waiting for {str(next_expected)}" )
 
             if index == next_expected:
                 next_expected +=1 
-            elif index < next_expected:
-                if any([idx >= next_expected for idx in recovery_queue.keys()]):
-                    recovery_queue[index] = clustered_df
-                    if len(recovery_queue) <= _DISPATCHER_GAP_RETRIES:
-                        continue
-                    
-                    index, clustered_df = recovery_queue.popitem(last=False)
-                    dropout.add(index)
-                else:
-                    next_expected = index +1 
-                    dropout = {}
             else:
-                recovery_queue[index] = clustered_df
-                if next_expected in recovery_queue.keys():
-                    index, clustered_df = next_expected, recovery_queue.pop(next_expected)
-                    next_expected += 1
-                elif len(recovery_queue) <= _DISPATCHER_GAP_RETRIES:
+                if len(recovery_queue) <= _DISPATCHER_GAP_RETRIES:
+                    recovery_queue[index] = clustered_df
                     continue
-                else:
-                    index, clustered_df = recovery_queue.popitem(last=False)
-                    dropout.add(index)
+                index, clustered_df = pop_next((index,clustered_df))
             
             while next_expected in dropout:
                 next_expected += 1
