@@ -1,6 +1,5 @@
-from p4p.nt import NTScalar
-from p4p.server import Server
-from p4p.server.thread import SharedPV
+from softioc import builder, softioc
+import cothread
 
 # from tpx3awkward.processing import Tpx3Config  #TODO
 from ctypes import c_int, c_bool
@@ -9,7 +8,6 @@ from multiprocessing import JoinableQueue, shared_memory, Process, Value, Manage
 from queue import Empty
 import time
 from pathlib import Path
-from bisect import insort
 import argparse
 
 from .file_worker import worker
@@ -41,111 +39,91 @@ buffers = []
 
 def start_ioc(manager, triggerable):
     print("[DAEMON] booting ioc")
-    scan = SharedPV(nt=NTScalar("d"), initial=SCAN.value)
-    dname = "DAEMON"
-    file_accum = []
+    builder.SetDeviceName(PREFIX.rstrip(":"))
 
-    @scan.put
-    def scan_num(scan, op):
-        print(f"[{dname}] scan update: {op.value()}")
-        if op.value() == -1:
+    dname = "DAEMON"
+
+    def scan_num(value):
+        print(f"[{dname}] scan update: {value}")
+        if int(value) == -1:
             SCAN.value = SCAN.value + 1
         else:
-            SCAN.value = int(op.value())
-        scan.post(SCAN.value)
-        op.done()
+            SCAN.value = int(value)
+        scan.set(SCAN.value)
 
-    sid = SharedPV(nt=NTScalar("d"), initial=SID.value)
-
-    @sid.put
-    def scan_id(sid, op):
-        print(f"[{dname}] SID update: {op.value()}")
-        if op.value() == -1:
+    def scan_id(value):
+        print(f"[{dname}] SID update: {value}")
+        if int(value) == -1:
             SID.value = SID.value + 1
         else:
-            SID.value = int(op.value())
-        sid.post(SID.value)
+            SID.value = int(value)
+        sid.set(SID.value)
         SCAN.value = -1
-        scan.post(SCAN.value)
-        op.done()
+        scan.set(SCAN.value)
 
     print("[DAEMON] host directory: ", manager["fpath"])
-    path = SharedPV(nt=NTScalar("s"), initial=str(manager["fpath"]))
 
-    @path.put
-    def pathing(path, op):
-        print(f"[{dname}] path update: {op.value()}")
-        pth = Path(op.value())
+    def pathing(value):
+        print(f"[{dname}] path update: {value}")
+        pth = Path(value)
         if pth.exists():
-            path.post(op.value())
+            path.set(str(pth))
             manager["fpath"] = str(pth)
-        op.done()
 
-    active = SharedPV(nt=NTScalar("?"), initial=ACTIVE.value)
+    def activate(value):
+        print(f"[{dname}] actvity set update: {value}")
+        ACTIVE.value = bool(value)
+        active.set(ACTIVE.value)
 
-    @active.put
-    def activate(active, op):
-        print(f"[{dname}] actvity set update: {op.value()}")
-        active.post(op.value())
-        ACTIVE.value = op.value()
-        op.done()
-
-    start = SharedPV(nt=NTScalar("?"), initial=False)
-    file_block = SharedPV(nt=NTScalar("as"), initial=[])
-
-    @start.put
-    def starting(start, op):
-        print(f"[{dname}] trigger update: {op.value()}")
+    def starting(value):
+        print(f"[{dname}] trigger update: {value}")
         if ACTIVE.value:
-            if op.value():
-                file_accum = []
-                file_block.post([])
+            if bool(value):
                 triggerable.set()
                 SCAN.value = SCAN.value + 1
-                start.post(op.value())
+                scan.set(SCAN.value)
+                start.set(True)
+        else:
+            start.set(False)
 
-        op.done()
+    # Writable/readable control PVs
+    scan = builder.longOut("scan", initial_value=SCAN.value, on_update=scan_num)
+    sid = builder.longOut("sid", initial_value=SID.value, on_update=scan_id)
+    path = builder.longStringOut(
+        "path", initial_value=str(manager["fpath"]), on_update=pathing, length=512
+    )
+    active = builder.boolOut("active", initial_value=ACTIVE.value, on_update=activate)
+    start = builder.boolOut("fire", initial_value=False, on_update=starting)
 
-    # broadcast = SharedPV(nt=NTNDArray(),initial = np.zeros((257,257)))
-    file_stream = SharedPV(nt=NTScalar("s"), initial=False)
+    # Read-only stream PV, updated by IOC internals only
+    file_stream = builder.longStringIn("file", initial_value="", length=512)
 
-    # @file_stream.put
-    # def post_file(pv,op):
-    #     print(f"[{dname}] new file update: {op.value()}")
-    #     pv.post(op.value())
-    #     op.done()
+    print(f"[{dname}] broadcasting on prefix address: {PREFIX}")
 
-    providers = [
-        {
-            f"{PREFIX}sid": sid,
-            f"{PREFIX}scan": scan,
-            f"{PREFIX}path": path,
-            f"{PREFIX}active": active,
-            f"{PREFIX}fire": start,
-            f"{PREFIX}file": file_stream,
-            f"{PREFIX}files": file_block,
-            # "tpx:pipe:broadcast": broadcast,
-        }
-    ]
-    print(f"[{dname}] broadcasting on preifx address: {PREFIX}")
-    with Server(providers=providers) as serv:
+    builder.LoadDatabase()
+    softioc.iocInit()
+    def update():
         while True:
             try:
-                index, path = file_q.get()
-                file_stream.post(str(path))
-                insort(
-                    file_accum, str(path), key=lambda x: int(Path(x).stem.split("_")[3])
-                )
-                file_block.post(file_accum)
+                _index, file_path = file_q.get(timeout=.01)
+                print(f"[{dname}] posting new file {_index} {file_path}")
+                file_stream.set(str(file_path))
+                cothread.Yield()
                 file_q.task_done()
 
                 if file_q.empty() and full_q.empty():
                     full_q.join()
                     if file_q.empty():
-                        start.post(False)
+                        start.set(False)
             except Empty:
-                time.sleep(0.1)
-    # Server.forever(providers=providers)
+                cothread.Sleep(.1)
+    cothread.Spawn(update)
+    # Finally leave the IOC running with an interactive shell.
+    try:
+        cothread.WaitForQuit() 
+    except KeyboardInterrupt:
+        cothread.quit()
+    # softioc.interactive_ioc(globals())
 
 
 def test_boot(alt_dir: Path = None):

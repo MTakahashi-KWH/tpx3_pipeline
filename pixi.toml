@@ -9,7 +9,6 @@ preview = ["pixi-build"]
 [tasks]
 
 [dependencies]
-p4p = ">=4.2.2,<5"
 numpy = ">=2.4.3,<3"
 dask = ">=2026.3.0,<2027"
 tiled = ">=0.1.6,<0.2"
@@ -20,3 +19,5 @@ pyarrow = ">=24.0.0,<25"
 
 [pypi-dependencies]
 tpx3awkward = { git = "https://github.com/NSLS2/tpx3awkward.git" }
+softioc = ">=4.7.0, <5"
+cothread = ">=2.20.1, <3"
