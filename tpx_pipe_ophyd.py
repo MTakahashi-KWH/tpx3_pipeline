@@ -8,6 +8,7 @@ class tpx3_pipe(Device,Flyable):
     sid = Component(EpicsSignal,"sid")
     scan = Component(EpicsSignal,"scan")
     path = Component(EpicsSignal,"path")
+    config = Component(EpicsSignal,"config")
     active = Component(EpicsSignal,"active")
     fire = Component(EpicsSignal,"fire")
     file_stream = Component(EpicsSignalRO,"file")

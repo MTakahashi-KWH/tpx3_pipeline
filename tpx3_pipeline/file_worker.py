@@ -1,15 +1,21 @@
 import time
 
 import numpy as np
-import tpx3awkward.processing as tpx
+import tpx3awkward as tpx
+from tpx3awkward.processing.config import Tpx3Config
+import json
 from pathlib import Path
 from queue import Empty
 from uuid import uuid6 as uid
+
+CONFIG_DIR = Path.cwd()/"tpx3.json"
 
 
 def worker(buffers, queues, params):
     free_q, full_q, out_q, file_q = queues
     sid, scan, active, handler = params
+    cf_path = None
+    tpx3_config = None
     while True:
         try:
             buf_i, size, index = full_q.get()  # take ownership
@@ -32,11 +38,15 @@ def worker(buffers, queues, params):
             arr = np.frombuffer(buf[:size], dtype="<u8")
             # do processing
             print(f"[worker]\t Processing {arr.size} ints")
-            res = tpx.decode_tpx3_binary(
-                arr
-            )  # pd.DataFrame(tpx.ingest_raw_data(arr)).sort_values("t").reset_index(drop=True)
-
-            clustered_df = tpx.cluster_raw_df( res, 0.3, 3,)
+            if cf_path != handler["cfigpath"]:
+                cf_path = Path(handler["cfigpath"])
+                try:
+                    with Path.open(cf_path) as f:
+                        tpx3config_json = json.load(f)
+                    tpx3_config = Tpx3Config(**tpx3config_json)
+                except Exception:
+                    tpx3_config = Tpx3Config.from_defaults()
+            clustered_df = tpx.convert_tpx3_binary(arr,config=tpx3_config)
 
             path = (
                 Path(handler["fpath"]) / f"buff_{sid.value}_{scan.value}_{index}.parquet"

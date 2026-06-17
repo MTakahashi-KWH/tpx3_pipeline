@@ -1,0 +1,15 @@
+{
+    "time_window": 0.3,
+    "radius": 3.0,
+    "estimate_energy": false,
+    "energy_estimation_parameters": null,
+    "correct_timewalk": false,
+    "timewalk_b": null,
+    "timewalk_c": null,
+    "correct_trim": false,
+    "trim_mask": null,
+    "file_extension": ".parquet",
+    "add_centroid_cols": true,
+    "overwrite": true,
+    "verbose": false
+}

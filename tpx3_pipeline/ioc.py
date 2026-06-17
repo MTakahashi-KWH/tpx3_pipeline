@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 import argparse
 
-from .file_worker import worker
+from .file_worker import worker, CONFIG_DIR
 from .socket_listener import socket_listener, BUFF_SIZE
 from .stream_dispatch import dispatcher
 
@@ -70,6 +70,15 @@ def start_ioc(manager, triggerable):
             path.set(str(pth))
             manager["fpath"] = str(pth)
 
+    print("[DAEMON] configuration directory: ", manager["cfigpath"])
+
+    def configuration(value):
+        print(f"[{dname}] configuration update: {value}")
+        pth = Path(value)
+        if pth.exists() and pth.is_file() and pth.suffix == ".json":
+            path.set(str(pth))
+            manager["cfigpath"] = str(pth)
+
     def activate(value):
         print(f"[{dname}] actvity set update: {value}")
         ACTIVE.value = bool(value)
@@ -91,6 +100,9 @@ def start_ioc(manager, triggerable):
     sid = builder.longOut("sid", initial_value=SID.value, on_update=scan_id)
     path = builder.longStringOut(
         "path", initial_value=str(manager["fpath"]), on_update=pathing, length=512
+    )
+    cfig_path = builder.longStringOut(
+        "config", initial_value=str(manager["cfigpath"]), on_update=configuration, length=512
     )
     active = builder.boolOut("active", initial_value=ACTIVE.value, on_update=activate)
     start = builder.boolOut("fire", initial_value=False, on_update=starting)
@@ -203,6 +215,7 @@ if __name__ == "__main__":
         # Create a shared dictionary
         shared_dict = manager.dict()
         shared_dict["fpath"] = OUTPUT_DIR
+        shared_dict["cfigpath"] = CONFIG_DIR
         trigger = deploy(shared_dict)
         try:
             start_ioc(shared_dict, trigger)
