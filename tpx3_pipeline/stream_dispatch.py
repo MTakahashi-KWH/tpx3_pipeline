@@ -64,6 +64,7 @@ def dispatcher(out_q,params,zmq_port=DISPATCHER_PORT):
     ctx    = zmq.Context()
     socket = ctx.socket(zmq.PUB)
     socket.setsockopt(zmq.SNDHWM, 1000)   # drop for slow subscribers beyond HWM
+    socket.set_hwm(2)
     socket.bind(f"tcp://*:{zmq_port}")
     print(f"[dispatcher]\t ZMQ PUB bound on tcp://*:{zmq_port}")
     try:

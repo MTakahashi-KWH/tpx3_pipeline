@@ -16,8 +16,8 @@ from .stream_dispatch import dispatcher
 
 Queue = JoinableQueue
 
-NUM_THREADS = 6
-NUM_BUFFERS = 16
+NUM_THREADS = 8
+NUM_BUFFERS = 20
 
 SID = Value(c_int, -1)
 SCAN = Value(c_int, -1)
