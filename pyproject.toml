@@ -15,6 +15,9 @@ version = "0.1.0"
 build-backend = "hatchling.build"
 requires = ["hatchling"]
 
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [tool.pixi.workspace]
 channels = ["conda-forge"]
 platforms = ["linux-64"]
