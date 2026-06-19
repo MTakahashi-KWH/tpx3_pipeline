@@ -21,3 +21,4 @@ pyarrow = ">=24.0.0,<25"
 tpx3awkward = { git = "https://github.com/NSLS2/tpx3awkward.git" }
 softioc = ">=4.7.0, <5"
 cothread = ">=2.20.1, <3"
+zmq = ">=0.0.0, <0.0.1"
