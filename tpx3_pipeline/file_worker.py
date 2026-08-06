@@ -7,12 +7,14 @@ import json
 from pathlib import Path
 from queue import Empty
 from uuid import uuid6 as uid
+import pyarrow as pa
 
 CONFIG_DIR = Path.cwd()/"tpx3.json"
 
 
 def worker(buffers, queues, params):
-    free_q, full_q, out_q, file_q = queues
+    in_bufs, str_bufs = buffers
+    free_q, full_q, str_q, out_q, file_q = queues
     sid, scan, active, handler = params
     cf_path = None
     tpx3_config = None
@@ -33,7 +35,7 @@ def worker(buffers, queues, params):
                 full_q.task_done()
                 continue
 
-            buf = buffers[buf_i].buf
+            buf = in_bufs[buf_i].buf
             # zero-copy cast
             arr = np.frombuffer(buf[:size], dtype="<u8")
             # do processing
@@ -54,8 +56,15 @@ def worker(buffers, queues, params):
             if path.exists():
                 path = path.with_stem(path.stem+"_"+str(uid()))
             clustered_df.to_parquet(path)
-            out_q.put((index, clustered_df))
             file_q.put((index, path))
+
+            str_ind = str_q.get()
+            out_buf = str_bufs[str_ind].buf
+            pybuf = pa.py_buffer(out_buf)
+            batch  = pa.RecordBatch.from_pandas(clustered_df, preserve_index=False)
+            writer = pa.FixedSizeBufferWriter(pybuf)
+            writer.write(batch)
+            out_q.put((index, clustered_df))
             # return buffer to pool
             free_q.put(buf_i)
             print(f"[worker]\t finished saving {path}")

@@ -1,17 +1,16 @@
-from softioc import builder, softioc
-import cothread
-
-# from tpx3awkward.processing import Tpx3Config  #TODO
-from ctypes import c_int, c_bool
-
-from multiprocessing import JoinableQueue, shared_memory, Process, Value, Manager, Event
-from queue import Empty
-import time
-from pathlib import Path
 import argparse
 
-from .file_worker import worker, CONFIG_DIR
-from .socket_listener import socket_listener, BUFF_SIZE
+# from tpx3awkward.processing import Tpx3Config  #TODO
+from ctypes import c_bool, c_int
+from multiprocessing import Event, JoinableQueue, Manager, Process, Value, shared_memory
+from pathlib import Path
+from queue import Empty
+
+import cothread
+from softioc import builder, softioc
+
+from .file_worker import CONFIG_DIR, worker
+from .socket_listener import BUFF_SIZE, socket_listener
 from .stream_dispatch import dispatcher
 
 Queue = JoinableQueue
@@ -30,12 +29,13 @@ PREFIX = "tpx:pipe:"
 
 free_q = Queue()
 full_q = Queue()
+str_q = Queue()
 out_q = Queue()
 file_q = Queue()
 
 # Preallocate buffers
 buffers = []
-
+stream_bufs = []
 
 def start_ioc(manager, triggerable):
     print("[DAEMON] booting ioc")
@@ -153,13 +153,19 @@ def deploy(data_host):
         shm = shared_memory.SharedMemory(create=True, size=BUFF_SIZE)
         buffers.append(shm)
         free_q.put(i)  # pass index, not data
+
+    for i in range(NUM_BUFFERS):
+        shm = shared_memory.SharedMemory(create=True, size=5*BUFF_SIZE)
+        stream_bufs.append(shm)
+        str_q.put(i)  # pass index, not data
+
     for i in range(NUM_THREADS):  # adjust based on CPU
         Process(
             target=worker,
             daemon=True,
             args=(
-                buffers,
-                (free_q, full_q, out_q, file_q),
+                (buffers,stream_bufs),
+                (free_q, full_q, str_q, out_q, file_q),
                 (SID, SCAN, ACTIVE, data_host),
             ),
             name=f"tpx_file_worker_{i}",
@@ -181,6 +187,10 @@ def close():
     file_q.join()
     out_q.join()
     for buf in buffers:
+        buf.close()
+        buf.unlink()
+    
+    for buf in stream_bufs:
         buf.close()
         buf.unlink()
 
