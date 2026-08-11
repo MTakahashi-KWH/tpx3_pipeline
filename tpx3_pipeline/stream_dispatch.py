@@ -75,15 +75,16 @@ def dispatcher(queues,params,buffs,zmq_port=DISPATCHER_PORT):
 
     ctx    = zmq.Context()
     socket = ctx.socket(zmq.PUB)
-    socket.setsockopt(zmq.SNDHWM, 1000)   # drop for slow subscribers beyond HWM
-    socket.set_hwm(2)
+    socket.setsockopt(zmq.SNDHWM, 1)   # drop for slow subscribers beyond HWM
+    # socket.set_hwm(2)
     socket.bind(f"tcp://*:{zmq_port}")
     print(f"[dispatcher]\t ZMQ PUB bound on tcp://*:{zmq_port}")
     try:
         while True:
+            pending_buffers = list(filter(free_buf,pending_buffers))
             try:
                 index, str_ind,nbytes = out_q.get(timeout= _DISPATCHER_POLL_TIMEOUT)  # take ownership
-                print(f"[DISPATCHER] received packet {str(index)}, waiting for {next_expected}")
+                print(f"[DISPATCHER] received packet {index!s}, waiting for {next_expected}")
                 if index != next_expected:
                     if len(recovery_queue) <= _DISPATCHER_GAP_RETRIES:
                         recovery_queue[index] = (str_ind,nbytes)
@@ -91,13 +92,13 @@ def dispatcher(queues,params,buffs,zmq_port=DISPATCHER_PORT):
                             continue
                     index, tup = pop_next((index,(str_ind,nbytes)))
                     str_ind,nbytes = tup
-                    print(f"[DISPATCHER] popped packet {str(index)}, waiting for {next_expected}")
+                    print(f"[DISPATCHER] popped packet {index!s}, waiting for {next_expected}")
             except Empty:
                 if next_expected not in recovery_queue:
                     continue
                 index, tup = pop_next()
                 str_ind,nbytes = tup
-                print(f"[DISPATCHER] popped target packet {str(index)}")
+                print(f"[DISPATCHER] popped target packet {index!s}")
 
             if index == next_expected:
                 next_expected +=1             
@@ -113,7 +114,6 @@ def dispatcher(queues,params,buffs,zmq_port=DISPATCHER_PORT):
                 copy=False,
                 track=True,
             )
-            pending_buffers = list(filter(free_buf,pending_buffers))
             pending_buffers.append((str_ind,pend))
             # _publish(socket=socket,idx=index,sid_val=SID.value,scan_val=SCAN.value,df=(str_ind,nbytes))
     except KeyboardInterrupt:
