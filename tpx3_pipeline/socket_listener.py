@@ -13,7 +13,6 @@ def stream(sock, buffers, queues):
     while True:
         buf_i = free_q.get()  # take ownership
         buf = buffers[buf_i].buf
-        # view = memoryview(buf)
 
         read_total = 0
         while (read_total < BUFF_SIZE * 0.8) or (read_total % 8 != 0):

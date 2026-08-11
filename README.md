@@ -8,7 +8,7 @@ It can be live changed in the ioc just like the output directory
 
 Option 1: import and boot from Python
 
-- Import `src.tpx_pipe_ioc`
+- Import `tpx_pipeline.ioc`
 - Call `test_boot()`
 - Use the returned pipeline trigger and output queues
 
@@ -16,7 +16,7 @@ Option 2: run as a fake EPICS IOC
 
 From the project root:
 ```bash
-pixi run python -m src.tpx_pipe_ioc [--path {alternate output directory} ]  [--prefix {IOC prefix}]
+pixi run python -m tpx3_pipeline.ioc [--path {alternate output directory} ]  [--prefix {IOC prefix}]
 ```
 
 Option 3: run using local_dispatch
