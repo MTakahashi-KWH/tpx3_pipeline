@@ -1,13 +1,13 @@
-import time
-
-import numpy as np
-import tpx3awkward as tpx
-from tpx3awkward.processing.config import Tpx3Config
 import json
+import time
 from pathlib import Path
 from queue import Empty
 from uuid import uuid6 as uid
+
+import numpy as np
 import pyarrow as pa
+import tpx3awkward as tpx
+from tpx3awkward.processing.config import Tpx3Config
 
 CONFIG_DIR = Path.cwd()/"tpx3.json"
 
@@ -49,6 +49,7 @@ def worker(buffers, queues, params):
                 except Exception:
                     tpx3_config = Tpx3Config.from_defaults()
             clustered_df = tpx.convert_tpx3_binary(arr,config=tpx3_config)
+            free_q.put(buf_i)
 
             path = (
                 Path(handler["fpath"]) / f"buff_{sid.value}_{scan.value}_{index}.parquet"
@@ -57,18 +58,19 @@ def worker(buffers, queues, params):
                 path = path.with_stem(path.stem+"_"+str(uid()))
             clustered_df.to_parquet(path)
             file_q.put((index, path))
+            # return buffer to pool
+            print(f"[worker]\t finished saving {path}")
+            full_q.task_done()
 
             str_ind = str_q.get()
             out_buf = str_bufs[str_ind].buf
             pybuf = pa.py_buffer(out_buf)
-            batch  = pa.RecordBatch.from_pandas(clustered_df, preserve_index=False)
-            writer = pa.FixedSizeBufferWriter(pybuf)
-            writer.write(batch)
-            out_q.put((index, clustered_df))
-            # return buffer to pool
-            free_q.put(buf_i)
-            print(f"[worker]\t finished saving {path}")
-            full_q.task_done()
+            with pa.output_stream(pybuf) as sink:
+                batch  = pa.RecordBatch.from_pandas(clustered_df, preserve_index=False)
+                with pa.ipc.new_stream(sink,batch.schema) as writer:
+                    writer.write(batch)
+                nbytes = sink.tell()
+            out_q.put((index,str_ind, nbytes))
         except Empty:
             time.sleep(.2)
             continue

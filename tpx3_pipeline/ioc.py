@@ -170,7 +170,7 @@ def deploy(data_host):
             ),
             name=f"tpx_file_worker_{i}",
         ).start()
-    Process(target=dispatcher,daemon=True,args=(out_q,(SID,SCAN)), name="tpx_dispatch_worker").start()
+    Process(target=dispatcher,daemon=True,args=((out_q,str_q),(SID,SCAN),stream_bufs), name="tpx_dispatch_worker").start()
 
     trigger_e = Event()
     t = Process(
