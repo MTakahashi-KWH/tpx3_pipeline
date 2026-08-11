@@ -46,10 +46,11 @@ def worker(buffers, queues, params):
                     with Path.open(cf_path) as f:
                         tpx3config_json = json.load(f)
                     tpx3_config = Tpx3Config(**tpx3config_json)
-                except Exception:
+                except FileNotFoundError:
                     tpx3_config = Tpx3Config.from_defaults()
             clustered_df = tpx.convert_tpx3_binary(arr,config=tpx3_config)
             free_q.put(buf_i)
+            print(f"[worker]\t generated dataframe of shape {clustered_df.shape!s}")
 
             path = (
                 Path(handler["fpath"]) / f"buff_{sid.value}_{scan.value}_{index}.parquet"
@@ -70,7 +71,11 @@ def worker(buffers, queues, params):
                 with pa.ipc.new_stream(sink,batch.schema) as writer:
                     writer.write(batch)
                 nbytes = sink.tell()
+            print(f"[worker]\t wrote {nbytes} bytes into buffer giving scaling {nbytes/size}")
             out_q.put((index,str_ind, nbytes))
         except Empty:
             time.sleep(.2)
             continue
+        except KeyboardInterrupt:
+            full_q.task_done()
+            return

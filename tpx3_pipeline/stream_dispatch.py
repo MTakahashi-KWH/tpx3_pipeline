@@ -1,32 +1,16 @@
 import struct
 from collections import OrderedDict
-import zmq
-import pyarrow as pa
 from queue import Empty
+
+import pyarrow as pa
+import zmq
+
 # import time
 
 DISPATCHER_PORT = 5557
 _DISPATCHER_POLL_TIMEOUT = 0.2   # seconds to wait on out_q before checking for gaps
 _DISPATCHER_GAP_RETRIES  = 6      # how many timeouts to tolerate before skipping a gap
 
-def _publish(socket, idx, sid_val, scan_val, df, buffs):
-    """Serialize df as Arrow IPC and send as a ZMQ PUB multipart message."""
-    ind, size = df
-    buf = buffs[ind].buf[:size]
-    # batch  = pa.RecordBatch.from_pandas(df, preserve_index=False)
-    # sink   = pa.BufferOutputStream()
-    # writer = pa.ipc.new_stream(sink, batch.schema)
-    # writer.write_batch(batch)
-    # writer.close()
-    # arrow_bytes = sink.getvalue().to_pybytes()
-    header = struct.pack(">qqq", idx, sid_val, scan_val)
-    # Explicit memoryview
-    # buf = sink.getvalue()
-    socket.send_multipart(
-        [b"tpx", header, buf],
-        copy=False
-    )
-    # socket.send_multipart([b"tpx", header, arrow_bytes])
 
 def dispatcher(queues,params,buffs,zmq_port=DISPATCHER_PORT):
     """
@@ -75,8 +59,7 @@ def dispatcher(queues,params,buffs,zmq_port=DISPATCHER_PORT):
 
     ctx    = zmq.Context()
     socket = ctx.socket(zmq.PUB)
-    socket.setsockopt(zmq.SNDHWM, 1)   # drop for slow subscribers beyond HWM
-    # socket.set_hwm(2)
+    socket.setsockopt(zmq.SNDHWM, len(buffs)//2)   # drop for slow subscribers beyond HWM
     socket.bind(f"tcp://*:{zmq_port}")
     print(f"[dispatcher]\t ZMQ PUB bound on tcp://*:{zmq_port}")
     try:

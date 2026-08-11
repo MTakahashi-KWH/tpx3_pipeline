@@ -117,11 +117,11 @@ def start_ioc(manager, triggerable):
     def update():
         while True:
             try:
-                _index, file_path = file_q.get(timeout=.01)
+                _index, file_path = file_q.get(timeout=.001)
                 print(f"[{dname}] posting new file {_index} {file_path}")
                 file_stream.set(str(file_path))
-                cothread.Yield()
                 file_q.task_done()
+                cothread.Sleep(0)
 
                 if file_q.empty() and full_q.empty():
                     full_q.join()
@@ -155,7 +155,7 @@ def deploy(data_host):
         free_q.put(i)  # pass index, not data
 
     for i in range(NUM_BUFFERS):
-        shm = shared_memory.SharedMemory(create=True, size=5*BUFF_SIZE)
+        shm = shared_memory.SharedMemory(create=True, size=3*BUFF_SIZE)
         stream_bufs.append(shm)
         str_q.put(i)  # pass index, not data
 
