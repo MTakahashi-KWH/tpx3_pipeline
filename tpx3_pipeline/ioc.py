@@ -130,7 +130,6 @@ def start_ioc(manager, triggerable):
             except Empty:
                 cothread.Sleep(.1)
     cothread.Spawn(update)
-    # Finally leave the IOC running with an interactive shell.
     try:
         cothread.WaitForQuit() 
     except KeyboardInterrupt:

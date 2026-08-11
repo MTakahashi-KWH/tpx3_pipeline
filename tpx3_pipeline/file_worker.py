@@ -18,26 +18,22 @@ def worker(buffers, queues, params):
     sid, scan, active, handler = params
     cf_path = None
     tpx3_config = None
+
     while True:
         try:
             buf_i, size, index = full_q.get()  # take ownership
-            print(
-                "[worker]\t claimed sequence item ",
-                index,
-                " of size ",
-                size,
-                " with tail(?) length ",
-                size % 8,
-            )
+            print(f"[worker]\t claimed sequence item {index} of size {size} with tail(?) length {size % 8}")
+
             if size == 0:
                 print("[worker]\t empty or terminal buffer, skipping")
                 free_q.put(buf_i)
                 full_q.task_done()
                 continue
 
-            buf = in_bufs[buf_i].buf
             # zero-copy cast
+            buf = in_bufs[buf_i].buf
             arr = np.frombuffer(buf[:size], dtype="<u8")
+
             # do processing
             print(f"[worker]\t Processing {arr.size} ints")
             if cf_path != handler["cfigpath"]:
@@ -49,20 +45,20 @@ def worker(buffers, queues, params):
                 except FileNotFoundError:
                     tpx3_config = Tpx3Config.from_defaults()
             clustered_df = tpx.convert_tpx3_binary(arr,config=tpx3_config)
-            free_q.put(buf_i)
+            free_q.put(buf_i)               # return buffer to pool
             print(f"[worker]\t generated dataframe of shape {clustered_df.shape!s}")
 
-            path = (
-                Path(handler["fpath"]) / f"buff_{sid.value}_{scan.value}_{index}.parquet"
-            )
+            # file saving
+            path = Path(handler["fpath"]) / f"buff_{sid.value}_{scan.value}_{index}.parquet"
             if path.exists():
                 path = path.with_stem(path.stem+"_"+str(uid()))
+
             clustered_df.to_parquet(path)
             file_q.put((index, path))
-            # return buffer to pool
             print(f"[worker]\t finished saving {path}")
             full_q.task_done()
 
+            # pass out to zmq stream through arrow ipc buffer
             str_ind = str_q.get()
             out_buf = str_bufs[str_ind].buf
             pybuf = pa.py_buffer(out_buf)
@@ -73,9 +69,10 @@ def worker(buffers, queues, params):
                 nbytes = sink.tell()
             print(f"[worker]\t wrote {nbytes} bytes into buffer giving scaling {nbytes/size}")
             out_q.put((index,str_ind, nbytes))
+
         except Empty:
             time.sleep(.2)
             continue
         except KeyboardInterrupt:
-            full_q.task_done()
+            # full_q.task_done()
             return
