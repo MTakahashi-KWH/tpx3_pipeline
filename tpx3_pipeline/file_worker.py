@@ -18,10 +18,11 @@ def worker(buffers, queues, params):
     sid, scan, active, handler = params
     cf_path = None
     tpx3_config = None
-
+    claim = False
     while True:
         try:
             buf_i, size, index = full_q.get()  # take ownership
+            claim = True
             print(f"[worker]\t claimed sequence item {index} of size {size} with tail(?) length {size % 8}")
 
             if size == 0:
@@ -56,6 +57,7 @@ def worker(buffers, queues, params):
             clustered_df.to_parquet(path)
             file_q.put((index, path))
             print(f"[worker]\t finished saving {path}")
+            claim = False
             full_q.task_done()
 
             # pass out to zmq stream through arrow ipc buffer
@@ -74,5 +76,10 @@ def worker(buffers, queues, params):
             time.sleep(.2)
             continue
         except KeyboardInterrupt:
-            # full_q.task_done()
+            print(f"[worker] keyboard interrupt with memory claim {claim}")
+            if claim:
+                full_q.task_done()
             return
+        except Exception as e:
+            print(f"[worker] passed exception if not caught by logstream:\n {e}")
+            raise e from None

@@ -3,7 +3,7 @@ import time
 
 HOST = "localhost"
 SERVAL = 8088
-BUFF_SIZE = 80 * 1024 * 1024
+BUFF_SIZE = 50 * 1024 * 1024
 RETRY_ATTEMPTS = 10
 
 def stream(sock, buffers, queues):
@@ -52,8 +52,11 @@ def trigger(buffers, queues):
 
 
 def socket_listener(trigger_e,buffers,queues):
-    while True:
-        trigger_e.wait()
-        print("[pipeline]\t Triggered: connecting...")
-        trigger(buffers,queues)
-        trigger_e.clear()
+    try:
+        while True:
+            trigger_e.wait()
+            print("[pipeline]\t Triggered: connecting...")
+            trigger(buffers,queues)
+            trigger_e.clear()
+    except KeyboardInterrupt:
+        ...
