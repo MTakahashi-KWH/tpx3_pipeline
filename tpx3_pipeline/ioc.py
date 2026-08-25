@@ -18,7 +18,7 @@ Queue = JoinableQueue
 NUM_THREADS = 8
 NUM_BUFFERS = 20
 
-SID = Value(c_int, -1)
+SID = Value(c_int, 0)
 SCAN = Value(c_int, -1)
 ACTIVE = Value(c_bool, True)
 data_dir = Path.cwd() / "data"
@@ -45,7 +45,7 @@ def start_ioc(manager, triggerable):
 
     def scan_num(value):
         print(f"[{dname}] scan update: {value}")
-        if int(value) == -1:
+        if int(value) == -2:
             SCAN.value = SCAN.value + 1
         else:
             SCAN.value = int(value)
