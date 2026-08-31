@@ -38,13 +38,13 @@ buffers = []
 stream_bufs = []
 
 def start_ioc(manager, triggerable):
-    print("[DAEMON] booting ioc")
+    print("[DAEMON]\tbooting ioc")
     builder.SetDeviceName(PREFIX.rstrip(":"))
 
     dname = "DAEMON"
 
     def scan_num(value):
-        print(f"[{dname}] scan update: {value}")
+        print(f"[{dname}]\tscan update: {value}")
         if int(value) == -2:
             SCAN.value = SCAN.value + 1
         else:
@@ -52,7 +52,7 @@ def start_ioc(manager, triggerable):
         scan.set(SCAN.value)
 
     def scan_id(value):
-        print(f"[{dname}] SID update: {value}")
+        print(f"[{dname}]\tSID update: {value}")
         if int(value) == -1:
             SID.value = SID.value + 1
         else:
@@ -61,31 +61,31 @@ def start_ioc(manager, triggerable):
         SCAN.value = -1
         scan.set(SCAN.value)
 
-    print("[DAEMON] host directory: ", manager["fpath"])
+    print("[DAEMON]\thost directory: ", manager["fpath"])
 
     def pathing(value):
-        print(f"[{dname}] path update: {value}")
+        print(f"[{dname}]\tpath update: {value}")
         pth = Path(value)
         if pth.exists():
             path.set(str(pth))
             manager["fpath"] = str(pth)
 
-    print("[DAEMON] configuration directory: ", manager["cfigpath"])
+    print("[DAEMON]\tconfiguration directory: ", manager["cfigpath"])
 
     def configuration(value):
-        print(f"[{dname}] configuration update: {value}")
+        print(f"[{dname}]\tconfiguration update: {value}")
         pth = Path(value)
         if pth.exists() and pth.is_file() and pth.suffix == ".json":
             path.set(str(pth))
             manager["cfigpath"] = str(pth)
 
     def activate(value):
-        print(f"[{dname}] actvity set update: {value}")
+        print(f"[{dname}]\tactvity set update: {value}")
         ACTIVE.value = bool(value)
         active.set(ACTIVE.value)
 
     def starting(value):
-        print(f"[{dname}] trigger update: {value}")
+        print(f"[{dname}]\ttrigger update: {value}")
         if ACTIVE.value:
             if bool(value):
                 triggerable.set()
@@ -110,7 +110,7 @@ def start_ioc(manager, triggerable):
     # Read-only stream PV, updated by IOC internals only
     file_stream = builder.longStringIn("file", initial_value="", length=512)
 
-    print(f"[{dname}] broadcasting on prefix address: {PREFIX}")
+    print(f"[{dname}]\tbroadcasting on prefix address: {PREFIX}")
 
     builder.LoadDatabase()
     softioc.iocInit()
@@ -118,12 +118,13 @@ def start_ioc(manager, triggerable):
         while True:
             try:
                 _index, file_path = file_q.get(timeout=.001)
-                print(f"[{dname}] posting new file {_index} {file_path}")
+                print(f"[{dname}]\tposting new file {_index} {file_path}")
                 file_stream.set(str(file_path))
                 file_q.task_done()
                 cothread.Sleep(0)
 
                 if file_q.empty() and full_q.empty():
+                    print(f"[{dname}]\tattempting closure of current run")
                     full_q.join()
                     if file_q.empty():
                         start.set(False)
@@ -133,6 +134,7 @@ def start_ioc(manager, triggerable):
     try:
         cothread.WaitForQuit() 
     except KeyboardInterrupt:
+        print(f"[{dname}]\tshutting down")
         cothread.quit()
     # softioc.interactive_ioc(globals())
 
@@ -140,13 +142,13 @@ def start_ioc(manager, triggerable):
 def test_boot(alt_dir: Path = None):
     print("[pipeline]\t starting up")
     trigger_e = deploy({"fpath": OUTPUT_DIR if alt_dir is None else alt_dir})
-    print("[pipeline]\t daemon processes deployed")
+    print("[pipeline]\tdaemon processes deployed")
 
     return trigger_e, out_q, file_q
 
 
 def deploy(data_host):
-    print("[DAEMON] entering daemon routine")
+    print("[DAEMON]\tentering daemon routine")
 
     for i in range(NUM_BUFFERS):
         shm = shared_memory.SharedMemory(create=True, size=BUFF_SIZE)

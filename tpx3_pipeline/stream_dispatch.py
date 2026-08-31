@@ -34,7 +34,16 @@ def dispatcher(queues,params,buffs,zmq_port=DISPATCHER_PORT):
 
         if shelve:
             ind, df = shelve
+            if (ind == 0) and (next_expected> 0): 
+                next_expected = 1
+                dropout = {}
+                return ind, df
+            if ind in recovery_queue:
+                dfx = recovery_queue.pop(ind)
+                recovery_queue[ind] = df
+                return ind, dfx
             recovery_queue[ind] = df
+
 
         if next_expected in recovery_queue:
             return next_expected, recovery_queue.pop(next_expected)
@@ -68,7 +77,7 @@ def dispatcher(queues,params,buffs,zmq_port=DISPATCHER_PORT):
     socket = ctx.socket(zmq.PUB)
     socket.setsockopt(zmq.SNDHWM, len(buffs)//2)   # drop for slow subscribers beyond HWM
     socket.bind(f"tcp://*:{zmq_port}")
-    print(f"[dispatcher]\t ZMQ PUB bound on tcp://*:{zmq_port}")
+    print(f"[dispatcher]\tZMQ PUB bound on tcp://*:{zmq_port}")
 
     #core loop
     try:
@@ -76,17 +85,18 @@ def dispatcher(queues,params,buffs,zmq_port=DISPATCHER_PORT):
             pending_buffers = list(filter(free_buf,pending_buffers))
             try:
                 index, str_ind,nbytes = out_q.get(timeout= _DISPATCHER_POLL_TIMEOUT)  # take ownership
-                print(f"[DISPATCHER] received packet {index!s}, waiting for {next_expected}")
+                out_q.task_done()
+                print(f"[DISPATCHER]\treceived packet {index!s}, waiting for {next_expected}")
 
-                if index != next_expected:
-                    if len(recovery_queue) <= _DISPATCHER_GAP_RETRIES:
-                        recovery_queue[index] = (str_ind,nbytes)
-                        if next_expected not in recovery_queue:
-                            continue
+                # if index != next_expected:
+                #     if len(recovery_queue) <= _DISPATCHER_GAP_RETRIES:
+                #         recovery_queue[index] = (str_ind,nbytes)
+                #         if next_expected not in recovery_queue:
+                #             continue
 
-                    index, tup = pop_next((index,(str_ind,nbytes)))
-                    str_ind,nbytes = tup
-                    print(f"[DISPATCHER] popped packet {index!s}, waiting for {next_expected}")
+                #     index, tup = pop_next((index,(str_ind,nbytes)))
+                #     str_ind,nbytes = tup
+                #     print(f"[DISPATCHER]\tpopped packet {index!s}, waiting for {next_expected}")
 
             except Empty:
                 if next_expected not in recovery_queue:
@@ -94,7 +104,7 @@ def dispatcher(queues,params,buffs,zmq_port=DISPATCHER_PORT):
 
                 index, tup = pop_next()
                 str_ind,nbytes = tup
-                print(f"[DISPATCHER] popped target packet {index!s}")
+                print(f"[DISPATCHER]\tpopped target packet {index!s}")
 
             if index == next_expected:
                 next_expected +=1             
@@ -102,7 +112,7 @@ def dispatcher(queues,params,buffs,zmq_port=DISPATCHER_PORT):
             while next_expected in dropout:
                 next_expected += 1
 
-            print(f"[DISPATCHER] publishing frame of index: {index} while targeting {next_expected}")
+            print(f"[DISPATCHER]\tpublishing frame of index: {index} while targeting {next_expected}")
             dropout.add(index)
 
             buf = buffs[str_ind].buf[:nbytes]
@@ -117,6 +127,9 @@ def dispatcher(queues,params,buffs,zmq_port=DISPATCHER_PORT):
     except KeyboardInterrupt:
         socket.close()
         ctx.term()
+    except Exception as e:
+        print(f"[DISPATCHER]\tpassed exception if not caught by logstream:\n {e}")
+        raise e from None
         
 
 

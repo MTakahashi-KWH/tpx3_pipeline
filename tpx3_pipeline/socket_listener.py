@@ -12,6 +12,7 @@ def stream(sock, buffers, queues):
     index = 0
     while True:
         buf_i = free_q.get()  # take ownership
+        free_q.task_done()
         buf = buffers[buf_i].buf
 
         read_total = 0
@@ -22,12 +23,12 @@ def stream(sock, buffers, queues):
                     break
                 flag_end = True
                 print(
-                    "[socket]\t 0 packet received... suspecting eot... awaiting next update"
+                    "[socket]\t0 packet received... suspecting eot... awaiting next update"
                 )
             read_total += n
-        print("[socket]\t writing out sequence ", index, " to buffer ", buf_i)
         # hand off buffer (no copy)
         full_q.put((buf_i, read_total - (read_total % 8), index))
+        print("[socket]\twrote out sequence ", index, " to buffer ", buf_i)
         index += 1
         if flag_end:
             return
@@ -55,8 +56,11 @@ def socket_listener(trigger_e,buffers,queues):
     try:
         while True:
             trigger_e.wait()
-            print("[pipeline]\t Triggered: connecting...")
+            print("[pipeline]\tTriggered: connecting...")
             trigger(buffers,queues)
             trigger_e.clear()
     except KeyboardInterrupt:
-        ...
+        print("[socket]\tending process")
+    except Exception as e:
+        print(f"[socket]\tpassed exception if not caught by logstream:\n {e}")
+        raise e from None
