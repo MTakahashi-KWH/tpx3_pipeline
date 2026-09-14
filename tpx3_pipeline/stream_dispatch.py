@@ -99,20 +99,24 @@ def dispatcher(queues,params,buffs,zmq_port=DISPATCHER_PORT):
                 #     print(f"[DISPATCHER]\tpopped packet {index!s}, waiting for {next_expected}")
 
             except Empty:
-                if next_expected not in recovery_queue:
-                    continue
+                continue
+                # if next_expected not in recovery_queue:
+                #     continue
 
-                index, tup = pop_next()
-                str_ind,nbytes = tup
-                print(f"[DISPATCHER]\tpopped target packet {index!s}")
+                # if len(recovery_queue) <1:
+                #     continue
 
-            if index == next_expected:
-                next_expected +=1             
+                # index, tup = pop_next()
+                # str_ind,nbytes = tup
+                # print(f"[DISPATCHER]\tpopped target packet {index!s}")
+
+            # if index == next_expected:
+            #     next_expected +=1             
             
-            while next_expected in dropout:
-                next_expected += 1
+            # while next_expected in dropout:
+            #     next_expected += 1
 
-            print(f"[DISPATCHER]\tpublishing frame of index: {index} while targeting {next_expected}")
+            print(f"[DISPATCHER]\tpublishing frame of index: {index}")# while targeting {next_expected}")
             dropout.add(index)
 
             buf = buffs[str_ind].buf[:nbytes]
